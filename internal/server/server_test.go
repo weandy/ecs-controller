@@ -118,13 +118,13 @@ func TestCheckForUpdateUsesGitHubReleaseTagsAsDisplayVersions(t *testing.T) {
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
-		case "/repos/Kori1c/ecs-controller/commits/main":
+		case "/repos/weandy/ecs-controller/commits/main":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"sha":      latestCommit,
 				"commit":   map[string]any{"message": "release build"},
-				"html_url": "https://github.com/Kori1c/ecs-controller/commit/" + latestCommit,
+				"html_url": "https://github.com/weandy/ecs-controller/commit/" + latestCommit,
 			})
-		case "/repos/Kori1c/ecs-controller/tags":
+		case "/repos/weandy/ecs-controller/tags":
 			_ = json.NewEncoder(w).Encode([]map[string]any{
 				{"name": "v1.6.40", "commit": map[string]any{"sha": latestCommit}},
 				{"name": "v1.6.39", "commit": map[string]any{"sha": currentCommit}},

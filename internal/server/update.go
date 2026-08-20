@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	defaultUpdateRepo   = "Kori1c/ecs-controller"
+	defaultUpdateRepo   = "weandy/ecs-controller"
 	defaultUpdateBranch = "main"
-	defaultImageRepo    = "docker.io/kori1c/ecs-controller"
+	defaultImageRepo    = "ghcr.io/weandy/ecs-controller"
 )
 
 var commitPattern = regexp.MustCompile(`^[a-fA-F0-9]{40}$`)

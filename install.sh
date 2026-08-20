@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-REPO_URL="${REPO_URL:-https://github.com/Kori1c/ecs-controller.git}"
+REPO_URL="${REPO_URL:-https://github.com/weandy/ecs-controller.git}"
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/ecs-controller}"
 BRANCH="${BRANCH:-main}"
 deploy_args=()
@@ -11,11 +11,12 @@ usage() {
 Usage: install.sh [--dir PATH] [--branch NAME] [--no-build]
 
 Clone or update ecs-controller, then pull prebuilt images and deploy it with Docker Compose.
+If prebuilt images are missing, deploy.sh builds them on the host.
 
 Options:
   --dir PATH       Installation directory (default: $HOME/ecs-controller)
   --branch NAME    Git branch to install (default: main)
-  --no-build       Compatibility option; images are never built on the deployment host
+  --no-build       Compatibility option; local build is used only when pull fails
   -h, --help       Show this help
 
 Environment:
@@ -62,6 +63,7 @@ if [[ -f "$script_dir/deploy.sh" && -d "$script_dir/.git" ]]; then
 elif [[ -d "$INSTALL_DIR/.git" ]]; then
     project_dir="$INSTALL_DIR"
     echo "Updating $project_dir..."
+    git -C "$project_dir" remote set-url origin "$REPO_URL"
     git -C "$project_dir" fetch origin "$BRANCH"
     git -C "$project_dir" pull --ff-only origin "$BRANCH"
 else

@@ -11,11 +11,11 @@
 在服务器上运行：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Kori1c/ecs-controller/main/install.sh \
+curl -fsSL https://raw.githubusercontent.com/weandy/ecs-controller/main/install.sh \
   | env ECS_COOKIE_SECURE=1 bash
 ```
 
-安装脚本会自动下载镜像并启动服务，不会在服务器上编译镜像。服务默认只监听服务器本机的 `43211` 端口，请通过你现有的 HTTPS 访问方式打开面板，不要直接开放这个端口。
+安装脚本会从本仓库拉取代码，并尽量使用预构建镜像启动。如果 `ghcr.io/weandy/ecs-controller` 上还没有对应镜像，脚本会在服务器上本地构建。服务默认只监听服务器本机的 `43211` 端口，请通过你现有的 HTTPS 访问方式打开面板，不要直接开放这个端口。
 
 公网使用 Passkey 时必须使用 HTTPS。
 
@@ -64,9 +64,14 @@ docker logs ecs-controller 2>&1 | grep '初始化 token'
 
 进入“关于 → 版本中心”，点击检查更新即可。
 
-只有 GitHub 上的 Docker 镜像已经准备好时才会更新，部署机器不会构建镜像。更新不会删除账号、配置和流量数据。
+本 fork 检查的是 `weandy/ecs-controller`，镜像仓库是 `ghcr.io/weandy/ecs-controller`。只有对应 commit 的 Docker 镜像已经推送完成后才会在线更新。更新不会删除账号、配置和流量数据。
 
-如果旧版本没有在线更新功能，重新运行一次安装命令即可。
+如果旧版本没有在线更新功能，或者当前还在跑原作者的安装，重新运行一次上面的安装命令即可。已有目录会被改到本仓库并快进更新，数据卷会保留。
+
+首次把 GitHub Container Registry 镜像设为 Public 后，之后的在线更新才能直接拉取：
+
+- https://github.com/users/weandy/packages/container/package/ecs-controller
+- https://github.com/users/weandy/packages/container/package/ecs-controller-updater
 
 ## 安全提醒
 
@@ -91,6 +96,7 @@ docker logs ecs-controller 2>&1 | grep '初始化 token'
 
 ## 相关链接
 
-- 项目地址：https://github.com/Kori1c/ecs-controller
-- 问题反馈：https://github.com/Kori1c/ecs-controller/issues
+- 项目地址：https://github.com/weandy/ecs-controller
+- 上游项目：https://github.com/Kori1c/ecs-controller
+- 问题反馈：https://github.com/weandy/ecs-controller/issues
 - 许可证：[MIT](./LICENSE)

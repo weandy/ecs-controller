@@ -17,15 +17,17 @@ if git -C "$SCRIPT_DIR" rev-parse --verify HEAD >/dev/null 2>&1; then
 else
     export ECS_IMAGE_TAG="${ECS_IMAGE_TAG:-latest}"
 fi
-export ECS_IMAGE_REPOSITORY="${ECS_IMAGE_REPOSITORY:-docker.io/kori1c/ecs-controller}"
-export ECS_UPDATER_IMAGE_REPOSITORY="${ECS_UPDATER_IMAGE_REPOSITORY:-docker.io/kori1c/ecs-controller-updater}"
+export ECS_IMAGE_REPOSITORY="${ECS_IMAGE_REPOSITORY:-ghcr.io/weandy/ecs-controller}"
+export ECS_UPDATER_IMAGE_REPOSITORY="${ECS_UPDATER_IMAGE_REPOSITORY:-ghcr.io/weandy/ecs-controller-updater}"
 export ECS_UPDATER_IMAGE_TAG="${ECS_UPDATER_IMAGE_TAG:-latest}"
+export ECS_UPDATE_REPO="${ECS_UPDATE_REPO:-weandy/ecs-controller}"
 
 usage() {
     cat <<'EOF'
 Usage: ./deploy.sh [--no-build]
 
 Pull prebuilt images and start ecs-controller with Docker Compose, then wait for /healthz.
+If the configured image repository does not have the tags yet, images are built locally.
 
 Environment:
   ECS_SETUP_TOKEN  One-time token used during first-run initialization.
@@ -72,9 +74,18 @@ if [[ -z "${ECS_SETUP_TOKEN:-}" ]]; then
 fi
 
 echo "Pulling prebuilt ecs-controller images..."
-"${compose_cmd[@]}" pull
+pulled=1
+if ! "${compose_cmd[@]}" pull; then
+    echo "Prebuilt images are not available yet; building locally..."
+    "${compose_cmd[@]}" build
+    pulled=0
+fi
 echo "Starting ecs-controller..."
-"${compose_cmd[@]}" up -d --no-build --remove-orphans
+if [[ "$pulled" -eq 1 ]]; then
+    "${compose_cmd[@]}" up -d --no-build --remove-orphans
+else
+    "${compose_cmd[@]}" up -d --remove-orphans
+fi
 
 container_name="$("${compose_cmd[@]}" ps -q ecs-controller)"
 if [[ -z "$container_name" ]]; then
