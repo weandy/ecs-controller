@@ -60,18 +60,62 @@ docker logs ecs-controller 2>&1 | grep '初始化 token'
 - Telegram、邮件和 Webhook 通知。
 - Passkey 免密码登录。
 
+## 升级已有安装
+
+已经在跑旧版或原作者版本时，在**那台 Linux 服务器**上重新执行安装命令即可：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/weandy/ecs-controller/main/install.sh \
+  | env ECS_COOKIE_SECURE=1 bash
+```
+
+脚本会把现有目录的 `origin` 指到本仓库、快进拉取 `main`，再拉取镜像并重启。账号、配置和流量数据在 Docker volume 里，不会被清掉。端口仍是本机 `127.0.0.1:43211`，原来的 HTTPS 反代不用改。
+
+如果记得安装目录，也可以不用 curl：
+
+```bash
+cd ~/ecs-controller
+git remote set-url origin https://github.com/weandy/ecs-controller.git
+git fetch origin
+git pull --ff-only origin main
+./deploy.sh
+```
+
+升级后检查：
+
+```bash
+docker ps --filter name=ecs-controller
+docker logs ecs-controller --tail 50
+```
+
+容器应显示 `healthy`。如果 Telegram 仍报 webhook 冲突，浏览器打开一次：
+
+```text
+https://api.telegram.org/bot<TOKEN>/deleteWebhook
+```
+
+然后给 Bot 发 `/start`。新版本在轮询时也会自动清除 webhook。
+
 ## 在线更新
 
 进入“关于 → 版本中心”，点击检查更新即可。
 
 本 fork 检查的是 `weandy/ecs-controller`，镜像仓库是 `ghcr.io/weandy/ecs-controller`。只有对应 commit 的 Docker 镜像已经推送完成后才会在线更新。更新不会删除账号、配置和流量数据。
 
-如果旧版本没有在线更新功能，或者当前还在跑原作者的安装，重新运行一次上面的安装命令即可。已有目录会被改到本仓库并快进更新，数据卷会保留。
+GitHub Container Registry 默认经常是私有的。服务器要直接拉镜像，需要先把两个 Package 改成 **Public**（改成公开后不能再改回私有）：
 
-首次把 GitHub Container Registry 镜像设为 Public 后，之后的在线更新才能直接拉取：
+1. [ecs-controller](https://github.com/users/weandy/packages/container/package/ecs-controller)
+2. [ecs-controller-updater](https://github.com/users/weandy/packages/container/package/ecs-controller-updater)
 
-- https://github.com/users/weandy/packages/container/package/ecs-controller
-- https://github.com/users/weandy/packages/container/package/ecs-controller-updater
+每个页面：右侧 **Package settings** → 最下面 **Danger Zone** → **Change visibility** → **Public** → 确认。两个都要改。可用下面命令确认，应返回 `200` 而不是 `401`：
+
+```bash
+curl -sS -o /dev/null -w "%{http_code}\n" \
+  -H "Accept: application/vnd.docker.distribution.manifest.v2+json" \
+  https://ghcr.io/v2/weandy/ecs-controller/manifests/latest
+```
+
+镜像还没公开时，上面的安装/升级命令仍能用：拉镜像失败后会在服务器本地构建，只是第一次会慢一些。设成 Public 之后，就可以继续用面板里的在线更新。
 
 ## 安全提醒
 
