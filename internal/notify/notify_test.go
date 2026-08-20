@@ -9,6 +9,75 @@ import (
 	"testing"
 )
 
+func TestTelegramGetUpdatesClearsActiveWebhookThenPolls(t *testing.T) {
+	var deleted bool
+	var getUpdates int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/getUpdates"):
+			getUpdates++
+			if !deleted {
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(`{"ok":false,"error_code":409,"description":"Conflict: can't use getUpdates method while webhook is active; use deleteWebhook to delete the webhook first"}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"ok":true,"result":[{"update_id":9}]}`))
+		case strings.HasSuffix(r.URL.Path, "/deleteWebhook"):
+			deleted = true
+			_, _ = w.Write([]byte(`{"ok":true,"result":true,"description":"Webhook was deleted"}`))
+		default:
+			t.Fatalf("unexpected Telegram path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewTelegramClient("token", "custom", server.URL, "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updates, err := client.GetUpdates(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("GetUpdates after webhook conflict: %v", err)
+	}
+	if !deleted {
+		t.Fatal("active webhook was not deleted")
+	}
+	if getUpdates != 2 {
+		t.Fatalf("expected getUpdates retry after deleteWebhook, got %d calls", getUpdates)
+	}
+	if len(updates) != 1 {
+		t.Fatalf("updates=%v", updates)
+	}
+}
+
+func TestTelegramGetUpdatesDoesNotDeleteWebhookOnOtherErrors(t *testing.T) {
+	var deleted bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/deleteWebhook") {
+			deleted = true
+			_, _ = w.Write([]byte(`{"ok":true,"result":true}`))
+			return
+		}
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"ok":false,"error_code":429,"description":"Too Many Requests: retry after 1"}`))
+	}))
+	defer server.Close()
+
+	client, err := NewTelegramClient("token", "custom", server.URL, "", "", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.GetUpdates(context.Background(), 1)
+	if err == nil || !strings.Contains(err.Error(), "Too Many Requests") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if deleted {
+		t.Fatal("deleteWebhook was called for a non-webhook error")
+	}
+}
+
 func TestTelegramClientPollingAndKeyboard(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/bottoken/getUpdates" && r.URL.Path != "/bottoken/sendMessage" {

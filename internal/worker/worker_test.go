@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -627,6 +630,83 @@ func TestTelegramTrafficShowsCDTAndInstanceTrafficSeparately(t *testing.T) {
 	for _, expected := range []string{"CDT 流量：6.99 GB / 190.00 GB", "实例流量：2.00 GB / 190.00 GB", "使用率：4%（取两者较高值）"} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("Telegram overview missing %q: %s", expected, body)
+		}
+	}
+}
+
+func TestTelegramControlClearsWebhookConflictAndReceivesMessage(t *testing.T) {
+	s, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	var deleted, sent atomic.Bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/getUpdates"):
+			if !deleted.Load() {
+				w.WriteHeader(http.StatusConflict)
+				_, _ = w.Write([]byte(`{"ok":false,"error_code":409,"description":"Conflict: can't use getUpdates method while webhook is active; use deleteWebhook to delete the webhook first"}`))
+				return
+			}
+			if sent.Load() {
+				_, _ = w.Write([]byte(`{"ok":true,"result":[]}`))
+				return
+			}
+			_, _ = w.Write([]byte(`{"ok":true,"result":[{"update_id":11,"message":{"chat":{"id":42},"from":{"id":42},"text":"/start"}}]}`))
+		case strings.HasSuffix(r.URL.Path, "/deleteWebhook"):
+			deleted.Store(true)
+			_, _ = w.Write([]byte(`{"ok":true,"result":true}`))
+		case strings.HasSuffix(r.URL.Path, "/sendMessage"):
+			sent.Store(true)
+			_, _ = w.Write([]byte(`{"ok":true,"result":{"message_id":1}}`))
+		default:
+			t.Fatalf("unexpected Telegram path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	for key, value := range map[string]string{
+		"notify_tg_enabled":    "1",
+		"notify_tg_token":      "token",
+		"notify_tg_chat_id":    "42",
+		"notify_tg_proxy_type": "custom",
+		"notify_tg_proxy_url":  server.URL,
+	} {
+		if err := s.SetSetting(key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		(&Worker{Store: s}).TelegramControl(ctx)
+	}()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if deleted.Load() && sent.Load() {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("TelegramControl did not exit")
+	}
+	if !deleted.Load() || !sent.Load() {
+		t.Fatalf("webhook recovery failed: deleted=%v sent=%v", deleted.Load(), sent.Load())
+	}
+	for _, row := range s.Logs("", 50) {
+		if msg, _ := row["message"].(string); strings.Contains(msg, "拉取消息失败") {
+			t.Fatalf("control poll still logged failure: %s", msg)
 		}
 	}
 }

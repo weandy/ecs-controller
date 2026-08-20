@@ -132,9 +132,27 @@ func (c *TelegramClient) AnswerCallback(ctx context.Context, id, message string)
 	return err
 }
 
+func (c *TelegramClient) DeleteWebhook(ctx context.Context) error {
+	_, err := c.Call(ctx, "deleteWebhook", url.Values{})
+	return err
+}
+
+func isTelegramWebhookConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "webhook is active")
+}
+
 func (c *TelegramClient) GetUpdates(ctx context.Context, offset int64) ([]map[string]any, error) {
 	values := url.Values{"offset": {strconv.FormatInt(offset, 10)}, "limit": {"20"}, "timeout": {"20"}, "allowed_updates": {`["message","callback_query"]`}}
 	response, err := c.Call(ctx, "getUpdates", values)
+	if isTelegramWebhookConflict(err) {
+		if delErr := c.DeleteWebhook(ctx); delErr != nil {
+			return nil, fmt.Errorf("%w（自动清除 webhook 失败: %v）", err, delErr)
+		}
+		response, err = c.Call(ctx, "getUpdates", values)
+	}
 	if err != nil {
 		return nil, err
 	}
