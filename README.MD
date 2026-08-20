@@ -81,6 +81,8 @@ git pull --ff-only origin main
 ./deploy.sh
 ```
 
+如果提示某个 `sha-...` 镜像 `not found`，说明当前 commit 的预构建镜像还没推上去。重新执行一次安装命令即可：脚本会改用 `latest`，再没有就在服务器本地构建。
+
 升级后检查：
 
 ```bash

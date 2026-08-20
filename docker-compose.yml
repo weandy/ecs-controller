@@ -1,6 +1,13 @@
 services:
   ecs-controller:
     image: ${ECS_IMAGE_REPOSITORY:-ghcr.io/weandy/ecs-controller}:${ECS_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        ECS_VERSION: ${ECS_VERSION:-dev}
+        ECS_COMMIT: ${ECS_COMMIT:-dev}
+        ECS_BUILD_DATE: ${ECS_BUILD_DATE:-unknown}
     container_name: ecs-controller
     restart: unless-stopped
     ports:
@@ -25,6 +32,9 @@ services:
   # pull a prebuilt image after an authenticated request.
   ecs-controller-updater:
     image: ${ECS_UPDATER_IMAGE_REPOSITORY:-ghcr.io/weandy/ecs-controller-updater}:${ECS_UPDATER_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: docker/updater.Dockerfile
     restart: unless-stopped
     environment:
       ECS_UPDATE_DIR: /update-state

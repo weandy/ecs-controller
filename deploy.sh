@@ -74,18 +74,24 @@ if [[ -z "${ECS_SETUP_TOKEN:-}" ]]; then
 fi
 
 echo "Pulling prebuilt ecs-controller images..."
-pulled=1
-if ! "${compose_cmd[@]}" pull; then
-    echo "Prebuilt images are not available yet; building locally..."
+if "${compose_cmd[@]}" pull; then
+    echo "Using published images: ${ECS_IMAGE_REPOSITORY}:${ECS_IMAGE_TAG}"
+elif [[ "${ECS_IMAGE_TAG}" == sha-* ]]; then
+    echo "Image tag ${ECS_IMAGE_TAG} is not published yet; trying latest..."
+    export ECS_IMAGE_TAG=latest
+    if "${compose_cmd[@]}" pull; then
+        echo "Using published images: ${ECS_IMAGE_REPOSITORY}:latest"
+    else
+        echo "Prebuilt images are not available; building locally..."
+        export ECS_IMAGE_TAG="sha-${ECS_COMMIT:-latest}"
+        "${compose_cmd[@]}" build
+    fi
+else
+    echo "Prebuilt images are not available; building locally..."
     "${compose_cmd[@]}" build
-    pulled=0
 fi
 echo "Starting ecs-controller..."
-if [[ "$pulled" -eq 1 ]]; then
-    "${compose_cmd[@]}" up -d --no-build --remove-orphans
-else
-    "${compose_cmd[@]}" up -d --remove-orphans
-fi
+"${compose_cmd[@]}" up -d --no-build --remove-orphans
 
 container_name="$("${compose_cmd[@]}" ps -q ecs-controller)"
 if [[ -z "$container_name" ]]; then
